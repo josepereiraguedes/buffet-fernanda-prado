@@ -77,3 +77,13 @@ export interface Notification {
   targetRole: UserRole; // Who should see this?
   targetUserId?: string; // Specific user (optional)
 }
+
+// UI Types
+export type ToastType = 'success' | 'error' | 'info' | 'warning';
+
+export interface ToastMessage {
+  id: string;
+  type: ToastType;
+  title: string;
+  message?: string;
+}

@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Search, Plus, Calendar, MapPin, Users, Clock, LayoutGrid, List as ListIcon, Filter, X, Trash, Save, Upload, Info } from 'lucide-react';
 import { Event, EventFunction, EventStatus } from '../../types';
 import { MockService } from '../../services/mockService';
+import { useToast } from '../../components/ui/Toast';
+import { CardSkeleton } from '../../components/ui/Skeleton';
 
 interface EventsListProps {
   navigate: (path: string) => void;
@@ -14,6 +16,8 @@ const EventsList: React.FC<EventsListProps> = ({ navigate, onManage }) => {
   const [statusFilter, setStatusFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState('all');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [loading, setLoading] = useState(true);
+  const { addToast } = useToast();
 
   // Create Modal State
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -42,7 +46,19 @@ const EventsList: React.FC<EventsListProps> = ({ navigate, onManage }) => {
   ]);
 
   useEffect(() => {
-    setEvents(MockService.getEvents());
+    const fetchEvents = async () => {
+        try {
+            setLoading(true);
+            const data = await MockService.getEvents();
+            setEvents(data);
+        } catch (error) {
+            console.error("Erro ao carregar eventos:", error);
+            addToast('error', 'Erro', 'Falha ao carregar lista de eventos');
+        } finally {
+            setLoading(false);
+        }
+    };
+    fetchEvents();
   }, []);
 
   // Filter Logic
@@ -85,50 +101,59 @@ const EventsList: React.FC<EventsListProps> = ({ navigate, onManage }) => {
     setFunctions(functions.filter((_, i) => i !== index));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const newEvent: Event = {
-      ...formData as Event,
-      id: `e_${Date.now()}`,
-      functions: functions as EventFunction[],
-      valuePartyHelper,
-      valueGeneralHelper
-    };
-    MockService.saveEvent(newEvent);
-    
-    // Refresh list and close modal
-    setEvents(MockService.getEvents());
-    setIsCreateModalOpen(false);
-    
-    // Reset form
-    setFormData({
-        title: '',
-        date: '',
-        time: '',
-        address: '',
-        description: '',
-        type: 'Casamento',
-        status: 'ABERTO',
-        imageUrl: 'https://picsum.photos/seed/new/800/400',
-    });
-    setValuePartyHelper(150);
-    setValueGeneralHelper(200);
-    setFunctions([
-        { id: 'f_garcom', name: 'Garçom', pay: 180, vacancies: 4, filled: 0 },
-        { id: 'f_copeira', name: 'Copeira', pay: 150, vacancies: 2, filled: 0 },
-    ]);
+    try {
+        const newEvent: Event = {
+            ...formData as Event,
+            id: `e_${Date.now()}`,
+            functions: functions as EventFunction[],
+            valuePartyHelper,
+            valueGeneralHelper
+        };
+        await MockService.saveEvent(newEvent);
+        
+        // Refresh list and close modal
+        const updatedEvents = await MockService.getEvents();
+        setEvents(updatedEvents);
+        setIsCreateModalOpen(false);
+        addToast('success', 'Evento Criado', `${newEvent.title} foi salvo com sucesso.`);
+        
+        // Reset form
+        setFormData({
+            title: '',
+            date: '',
+            time: '',
+            address: '',
+            description: '',
+            type: 'Casamento',
+            status: 'ABERTO',
+            imageUrl: 'https://picsum.photos/seed/new/800/400',
+        });
+        setValuePartyHelper(150);
+        setValueGeneralHelper(200);
+        setFunctions([
+            { id: 'f_garcom', name: 'Garçom', pay: 180, vacancies: 4, filled: 0 },
+            { id: 'f_copeira', name: 'Copeira', pay: 150, vacancies: 2, filled: 0 },
+        ]);
+    } catch(err) {
+        addToast('error', 'Erro', 'Falha ao criar evento.');
+    }
   };
 
   // Status Cycle Logic
-  const handleStatusClick = (e: React.MouseEvent, event: Event) => {
+  const handleStatusClick = async (e: React.MouseEvent, event: Event) => {
       e.stopPropagation();
       const statusOrder: EventStatus[] = ['ABERTO', 'EM_FORMACAO', 'CONCLUIDO', 'CANCELADO'];
       const currentIndex = statusOrder.indexOf(event.status);
       const nextStatus = statusOrder[(currentIndex + 1) % statusOrder.length];
       
       const updatedEvent = { ...event, status: nextStatus };
-      MockService.saveEvent(updatedEvent);
-      setEvents(MockService.getEvents()); // Refresh UI
+      await MockService.saveEvent(updatedEvent);
+      
+      const refreshedEvents = await MockService.getEvents();
+      setEvents(refreshedEvents); 
+      addToast('info', 'Status Atualizado', `Evento agora está ${nextStatus.replace('_', ' ')}`);
   };
 
   const getStatusColor = (status: string) => {
@@ -142,6 +167,19 @@ const EventsList: React.FC<EventsListProps> = ({ navigate, onManage }) => {
   };
   
   const getStatusLabel = (status: string) => status.replace('_', ' ');
+
+  if (loading) {
+    return (
+        <div className="space-y-8">
+            <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
+                 <div className="space-y-2 w-1/3"><div className="h-8 bg-gray-200 rounded animate-pulse"></div><div className="h-4 bg-gray-200 rounded animate-pulse w-2/3"></div></div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <CardSkeleton /><CardSkeleton /><CardSkeleton />
+            </div>
+        </div>
+    );
+  }
 
   return (
     <div className="space-y-8">

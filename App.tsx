@@ -3,6 +3,7 @@ import Layout from './components/Layout';
 import { MockService } from './services/mockService';
 import { User } from './types';
 import { AdminLogin, StaffLogin, StaffRegister } from './pages/AuthScreens';
+import { ToastProvider } from './components/ui/Toast';
 
 // Pages
 import AdminDashboard from './pages/admin/AdminDashboard';
@@ -15,30 +16,33 @@ import StaffMarketplace from './pages/staff/StaffMarketplace';
 import StaffProfile from './pages/staff/StaffProfile';
 import StaffJobs from './pages/staff/StaffJobs';
 
-const App: React.FC = () => {
+const AppContent: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
-  const [currentPath, setCurrentPath] = useState<string>('/');
+  const [currentPath, setCurrentPath] = useState<string>(window.location.pathname === '/' ? '/' : window.location.pathname);
   const [manageEventId, setManageEventId] = useState<string | null>(null);
   
   // Auth State (Only for Staff toggling between Login/Register)
   const [staffAuthMode, setStaffAuthMode] = useState<'staff_login' | 'staff_register'>('staff_login');
   
-  // Check if we are on the admin path
-  const isAdminPath = window.location.pathname.startsWith('/admin');
-
   useEffect(() => {
     // Restore session if exists
     const loggedUser = MockService.getCurrentUser();
     if (loggedUser) {
       setUser(loggedUser);
-      // Ensure redirect to correct dashboard on load
-      if (window.location.pathname === '/' || currentPath === '/') {
-          setCurrentPath(loggedUser.role === 'ADMIN' ? '/admin/dashboard' : '/staff/marketplace');
+      // Ensure redirect to correct dashboard on load if at root
+      if (currentPath === '/') {
+          const path = loggedUser.role === 'ADMIN' ? '/admin/dashboard' : '/staff/marketplace';
+          setCurrentPath(path);
+          window.history.replaceState({}, '', path);
       }
-    } else {
-        // If not logged in, sync currentPath with window
-        setCurrentPath(window.location.pathname);
     }
+    
+    // Handle browser back/forward buttons
+    const onPopState = () => {
+        setCurrentPath(window.location.pathname);
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
   }, []);
 
   // SECURITY: Route Protection Logic
@@ -47,12 +51,12 @@ const App: React.FC = () => {
         // If Staff tries to access Admin pages -> Redirect to Staff Dashboard
         if (user.role === 'STAFF' && currentPath.startsWith('/admin')) {
             console.warn("Acesso não autorizado: Staff tentando acessar Admin. Redirecionando.");
-            setCurrentPath('/staff/marketplace');
+            navigate('/staff/marketplace');
         }
         
         // If Admin tries to access Staff specific pages (optional) -> Redirect to Admin Dashboard
         if (user.role === 'ADMIN' && currentPath.startsWith('/staff')) {
-            setCurrentPath('/admin/dashboard');
+            navigate('/admin/dashboard');
         }
     }
   }, [currentPath, user]);
@@ -60,13 +64,14 @@ const App: React.FC = () => {
   const handleLogout = async () => {
     await MockService.logout();
     setUser(null);
-    setCurrentPath('/');
+    navigate('/');
     setStaffAuthMode('staff_login');
   };
 
   const navigate = (path: string) => {
     window.scrollTo(0, 0);
     setCurrentPath(path);
+    window.history.pushState({}, '', path);
   };
 
   const updateCurrentUser = (u: User) => {
@@ -75,9 +80,14 @@ const App: React.FC = () => {
 
   // --- LOGIN ROUTING LOGIC ---
   if (!user) {
-      if (isAdminPath) {
-          // If URL is /admin..., show strictly Admin Login
-          return <AdminLogin onLogin={setUser} onNavigate={() => {}} />;
+      // Check currentPath state instead of window.location directly to allow SPA navigation
+      if (currentPath.startsWith('/admin')) {
+          return <AdminLogin 
+            onLogin={setUser} 
+            onNavigate={(screen) => {
+                if (screen === 'staff_login') navigate('/');
+            }} 
+          />;
       } else {
           // Default (Root URL) -> Show Staff Login/Register
           if (staffAuthMode === 'staff_register') {
@@ -87,6 +97,7 @@ const App: React.FC = () => {
           }
           return <StaffLogin onLogin={setUser} onNavigate={(screen) => {
               if (screen === 'staff_register') setStaffAuthMode('staff_register');
+              if (screen === 'admin_login') navigate('/admin');
           }} />;
       }
   }
@@ -137,5 +148,13 @@ const App: React.FC = () => {
     </Layout>
   );
 };
+
+const App: React.FC = () => {
+    return (
+        <ToastProvider>
+            <AppContent />
+        </ToastProvider>
+    );
+}
 
 export default App;

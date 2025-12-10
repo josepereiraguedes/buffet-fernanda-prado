@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { User, Lock, Mail, Phone, Briefcase, UserPlus } from 'lucide-react';
+import { User, Lock, Mail, Phone, Briefcase, UserPlus, Shield } from 'lucide-react';
 import { MockService } from '../services/mockService';
 import { User as UserType } from '../types';
 
@@ -23,8 +23,20 @@ const AuthLayout: React.FC<{ children: React.ReactNode, title: string, subtitle:
     </div>
 );
 
+// Helper function to translate Supabase errors
+const translateError = (message: string): string => {
+    const msg = message.toLowerCase();
+    if (msg.includes('email signups are disabled')) return 'O cadastro de novos usuários está desativado no sistema.';
+    if (msg.includes('invalid login credentials')) return 'Email ou senha incorretos.';
+    if (msg.includes('user already registered')) return 'Este email já possui cadastro.';
+    if (msg.includes('password should be at least')) return 'A senha deve ter no mínimo 6 caracteres.';
+    if (msg.includes('anonymous signins are disabled')) return 'Acesso anônimo desativado.';
+    if (msg.includes('rate limit')) return 'Muitas tentativas. Aguarde um momento.';
+    return message; // Fallback to original message if unknown
+};
+
 // 1. ADMIN LOGIN - STRICTLY SEPARATED
-export const AdminLogin: React.FC<AuthProps> = ({ onLogin }) => {
+export const AdminLogin: React.FC<AuthProps> = ({ onLogin, onNavigate }) => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
@@ -43,7 +55,7 @@ export const AdminLogin: React.FC<AuthProps> = ({ onLogin }) => {
                 await MockService.logout();
             }
         } catch (err: any) {
-            setError('Credenciais inválidas.');
+            setError(translateError(err.message || 'Erro ao fazer login'));
         } finally {
             setLoading(false);
         }
@@ -87,8 +99,17 @@ export const AdminLogin: React.FC<AuthProps> = ({ onLogin }) => {
                     {loading ? 'Verificando...' : 'Acessar Painel'}
                 </button>
             </form>
-            <div className="mt-6 text-center text-xs text-gray-400">
-                <Lock size={12} className="inline mr-1" /> Ambiente Seguro
+            
+            <div className="mt-6 flex flex-col gap-3 text-center">
+                 <div className="text-xs text-gray-400">
+                    <Lock size={12} className="inline mr-1" /> Ambiente Seguro
+                </div>
+                <button 
+                    onClick={() => onNavigate('staff_login')} 
+                    className="text-slate-500 text-sm hover:text-slate-800 hover:underline"
+                >
+                    Voltar para Login de Colaboradores
+                </button>
             </div>
         </AuthLayout>
     );
@@ -119,7 +140,7 @@ export const StaffLogin: React.FC<AuthProps> = ({ onLogin, onNavigate }) => {
                  }
             }
         } catch (err: any) {
-            setError('Email ou senha incorretos.');
+            setError(translateError(err.message || 'Email ou senha incorretos.'));
         } finally {
             setLoading(false);
         }
@@ -164,13 +185,22 @@ export const StaffLogin: React.FC<AuthProps> = ({ onLogin, onNavigate }) => {
                 </button>
             </form>
             
-            <div className="mt-6 border-t pt-6 text-center">
-                <p className="text-sm text-gray-500 mb-3">Ainda não faz parte da equipe?</p>
+            <div className="mt-6 border-t pt-6 text-center space-y-4">
+                <div>
+                    <p className="text-sm text-gray-500 mb-2">Ainda não faz parte da equipe?</p>
+                    <button 
+                        onClick={() => onNavigate('staff_register')}
+                        className="text-rose-600 font-bold hover:underline flex items-center justify-center gap-2 w-full"
+                    >
+                        <UserPlus size={16} /> Criar Cadastro Grátis
+                    </button>
+                </div>
+                
                 <button 
-                    onClick={() => onNavigate('staff_register')}
-                    className="text-rose-600 font-bold hover:underline flex items-center justify-center gap-2 w-full"
+                    onClick={() => onNavigate('admin_login')} 
+                    className="text-xs text-gray-400 hover:text-gray-600 flex items-center justify-center gap-1 w-full pt-4"
                 >
-                    <UserPlus size={16} /> Criar Cadastro Grátis
+                    <Shield size={12} /> Acesso Administrativo
                 </button>
             </div>
         </AuthLayout>
@@ -194,7 +224,7 @@ export const StaffRegister: React.FC<AuthProps> = ({ onLogin, onNavigate }) => {
             const newUser = await MockService.registerUser(name, email, phone, password);
             onLogin(newUser);
         } catch (err: any) {
-            setError(err.message || 'Erro ao criar conta. Verifique os dados.');
+            setError(translateError(err.message || 'Erro ao criar conta. Verifique os dados.'));
         } finally {
             setLoading(false);
         }

@@ -7,6 +7,7 @@ const StaffList: React.FC = () => {
   const [users, setUsers] = useState<UserType[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
+  const [loading, setLoading] = useState(true);
   
   // Add Modal
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -21,7 +22,18 @@ const StaffList: React.FC = () => {
   });
 
   useEffect(() => {
-    setUsers(MockService.getUsers());
+    const fetchUsers = async () => {
+        try {
+            setLoading(true);
+            const data = await MockService.getUsers();
+            setUsers(data);
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setLoading(false);
+        }
+    };
+    fetchUsers();
   }, []);
 
   const staffUsers = users.filter(u => u.role === 'STAFF');
@@ -43,7 +55,7 @@ const StaffList: React.FC = () => {
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
       
       const newUser: UserType = {
@@ -53,10 +65,11 @@ const StaffList: React.FC = () => {
       };
       
       // Persist to MockService
-      MockService.saveUser(newUser);
+      await MockService.saveUser(newUser);
       
       // Update local state
-      setUsers(MockService.getUsers());
+      const updatedUsers = await MockService.getUsers();
+      setUsers(updatedUsers);
       setIsModalOpen(false);
       
       // Reset Form
@@ -71,6 +84,8 @@ const StaffList: React.FC = () => {
     });
       alert("Colaborador cadastrado com sucesso!");
   };
+
+  if (loading) return <div className="p-12 text-center text-gray-500">Carregando colaboradores...</div>;
 
   return (
     <div className="space-y-8">

@@ -6,10 +6,25 @@ import { Event, User } from '../../types';
 const Reports: React.FC = () => {
   const [events, setEvents] = useState<Event[]>([]);
   const [users, setUsers] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    setEvents(MockService.getEvents());
-    setUsers(MockService.getUsers());
+    const loadData = async () => {
+        try {
+            setLoading(true);
+            const [fetchedEvents, fetchedUsers] = await Promise.all([
+                MockService.getEvents(),
+                MockService.getUsers()
+            ]);
+            setEvents(fetchedEvents);
+            setUsers(fetchedUsers);
+        } catch (error) {
+            console.error(error);
+        } finally {
+            setLoading(false);
+        }
+    };
+    loadData();
   }, []);
 
   // Stats Calculation
@@ -26,6 +41,8 @@ const Reports: React.FC = () => {
     .filter(u => u.role === 'STAFF')
     .sort((a,b) => (b.rating || 0) - (a.rating || 0))
     .slice(0, 10);
+
+  if (loading) return <div className="p-12 text-center text-gray-500">Calculando métricas...</div>;
 
   return (
     <div className="space-y-8">

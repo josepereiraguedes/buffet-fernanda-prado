@@ -3,6 +3,8 @@ import { Event, Application, User } from '../../types';
 import { MockService } from '../../services/mockService';
 import EventCard from '../../components/EventCard';
 import { CheckCircle, Clock, XCircle, AlertCircle, AlertTriangle } from 'lucide-react';
+import { useToast } from '../../components/ui/Toast';
+import { CardSkeleton } from '../../components/ui/Skeleton';
 
 interface StaffMarketplaceProps {
   user: User;
@@ -13,6 +15,7 @@ const StaffMarketplace: React.FC<StaffMarketplaceProps> = ({ user }) => {
   const [applications, setApplications] = useState<Application[]>([]);
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [loading, setLoading] = useState(true);
+  const { addToast } = useToast();
 
   // Cancellation State
   const [showCancelModal, setShowCancelModal] = useState(false);
@@ -39,6 +42,7 @@ const StaffMarketplace: React.FC<StaffMarketplaceProps> = ({ user }) => {
         }
     } catch (e) {
         console.error(e);
+        addToast('error', 'Erro ao carregar dados', 'Não foi possível atualizar o mural.');
     } finally {
         setLoading(false);
     }
@@ -57,7 +61,7 @@ const StaffMarketplace: React.FC<StaffMarketplaceProps> = ({ user }) => {
     
     const existingApp = applications.find(a => a.eventId === selectedEvent.id && a.status !== 'CANCELADO');
     if (existingApp) {
-        alert("Você já possui uma inscrição ativa para este evento.");
+        addToast('info', 'Já inscrito', 'Você já possui uma inscrição ativa para este evento.');
         return;
     }
 
@@ -67,19 +71,23 @@ const StaffMarketplace: React.FC<StaffMarketplaceProps> = ({ user }) => {
         }
     }
     
-    const newApp: Application = {
-      id: '', // DB auto-gen
-      eventId: selectedEvent.id,
-      userId: user.id,
-      functionId: roleId,
-      status: 'PENDENTE',
-      appliedAt: new Date().toISOString()
-    };
+    try {
+        const newApp: Application = {
+            id: '', // DB auto-gen
+            eventId: selectedEvent.id,
+            userId: user.id,
+            functionId: roleId,
+            status: 'PENDENTE',
+            appliedAt: new Date().toISOString()
+        };
 
-    await MockService.createApplication(newApp);
-    await loadData();
-    setSelectedEvent(null); 
-    alert('Candidatura enviada! Aguarde a aprovação do administrador.');
+        await MockService.createApplication(newApp);
+        await loadData();
+        setSelectedEvent(null); 
+        addToast('success', 'Candidatura Enviada!', 'Aguarde a aprovação do administrador.');
+    } catch(e) {
+        addToast('error', 'Erro na candidatura', 'Tente novamente mais tarde.');
+    }
   };
 
   const initiateCancel = (app: Application) => {
@@ -90,21 +98,41 @@ const StaffMarketplace: React.FC<StaffMarketplaceProps> = ({ user }) => {
 
   const confirmCancel = async () => {
       if (!applicationToCancel || !cancelReason.trim()) {
-          alert('Por favor, informe o motivo do cancelamento.');
+          addToast('warning', 'Motivo Obrigatório', 'Por favor, informe o motivo do cancelamento.');
           return;
       }
       
-      await MockService.cancelApplication(applicationToCancel.id, cancelReason);
-      
-      setShowCancelModal(false);
-      setApplicationToCancel(null);
-      setCancelReason('');
-      await loadData();
-      setSelectedEvent(null); // Close main modal
-      alert('Sua candidatura foi cancelada.');
+      try {
+          await MockService.cancelApplication(applicationToCancel.id, cancelReason);
+          
+          setShowCancelModal(false);
+          setApplicationToCancel(null);
+          setCancelReason('');
+          await loadData();
+          setSelectedEvent(null); // Close main modal
+          addToast('info', 'Cancelado', 'Sua candidatura foi cancelada.');
+      } catch (e) {
+          addToast('error', 'Erro ao cancelar');
+      }
   };
 
-  if (loading && events.length === 0) return <div className="p-8 text-center text-gray-500">Carregando eventos...</div>;
+  if (loading && events.length === 0) {
+      return (
+          <div className="space-y-6">
+              <div className="flex justify-between items-center">
+                  <div>
+                      <h2 className="text-2xl font-bold text-gray-800">Mural de Eventos</h2>
+                      <p className="text-sm text-gray-500">Eventos disponíveis para candidatura em tempo real.</p>
+                  </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  <CardSkeleton />
+                  <CardSkeleton />
+                  <CardSkeleton />
+              </div>
+          </div>
+      )
+  }
 
   return (
     <div className="space-y-6">
