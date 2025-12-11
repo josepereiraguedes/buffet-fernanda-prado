@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Calendar, CheckCircle, Clock, MapPin, DollarSign, XCircle, Star, RefreshCcw, AlertTriangle } from 'lucide-react';
 import { User, Application, Event, Evaluation } from '../../types';
 import { MockService } from '../../services/mockService';
+import { useToast } from '../../components/ui/Toast';
 
 interface StaffJobsProps {
   user: User;
@@ -14,6 +15,7 @@ const StaffJobs: React.FC<StaffJobsProps> = ({ user }) => {
   const [applications, setApplications] = useState<Application[]>([]);
   const [events, setEvents] = useState<Event[]>([]);
   const [evaluations, setEvaluations] = useState<Evaluation[]>([]);
+  const { addToast } = useToast();
   
   // Cancellation State
   const [showCancelModal, setShowCancelModal] = useState(false);
@@ -62,17 +64,21 @@ const StaffJobs: React.FC<StaffJobsProps> = ({ user }) => {
 
   const confirmCancel = async () => {
     if (!applicationToCancel || !cancelReason.trim()) {
-        alert('Por favor, informe o motivo do cancelamento.');
+        addToast('warning', 'Motivo Obrigatório', 'Por favor, informe o motivo do cancelamento.');
         return;
     }
     
-    await MockService.cancelApplication(applicationToCancel.id, cancelReason);
-    
-    setShowCancelModal(false);
-    setApplicationToCancel(null);
-    setCancelReason('');
-    loadData();
-    alert('Candidatura cancelada com sucesso.');
+    try {
+        await MockService.cancelApplication(applicationToCancel.id, cancelReason);
+        
+        setShowCancelModal(false);
+        setApplicationToCancel(null);
+        setCancelReason('');
+        loadData();
+        addToast('info', 'Cancelado', 'Sua candidatura foi cancelada.');
+    } catch(e) {
+        addToast('error', 'Erro', 'Falha ao cancelar.');
+    }
   };
 
   const renderCard = (app: Application, isHistory = false) => {

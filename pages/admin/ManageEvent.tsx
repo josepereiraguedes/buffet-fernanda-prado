@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Check, X, Star, User } from 'lucide-react';
+import { ArrowLeft, Check, X, Star, User, Loader2, AlertTriangle } from 'lucide-react';
 import { Event, Application, User as UserType } from '../../types';
 import { MockService } from '../../services/mockService';
+import { useToast } from '../../components/ui/Toast';
 
 interface ManageEventProps {
   eventId: string;
@@ -13,6 +14,8 @@ const ManageEvent: React.FC<ManageEventProps> = ({ eventId, onBack }) => {
   const [applications, setApplications] = useState<Application[]>([]);
   const [users, setUsers] = useState<UserType[]>([]);
   const [selectedFunction, setSelectedFunction] = useState<string>('all');
+  const [processingId, setProcessingId] = useState<string | null>(null);
+  const { addToast } = useToast();
 
   // Evaluation Modal State
   const [evalModalOpen, setEvalModalOpen] = useState(false);
@@ -21,31 +24,48 @@ const ManageEvent: React.FC<ManageEventProps> = ({ eventId, onBack }) => {
 
   useEffect(() => {
     loadData();
+    // Poll to keep in sync with cancellations
+    const interval = setInterval(loadData, 5000);
+    return () => clearInterval(interval);
   }, [eventId]);
 
   const loadData = async () => {
-    const allEvents = await MockService.getEvents();
-    const evt = allEvents.find(e => e.id === eventId);
-    if (evt) setEvent(evt);
+    try {
+        const allEvents = await MockService.getEvents();
+        const evt = allEvents.find(e => e.id === eventId);
+        if (evt) setEvent(evt);
 
-    const allApps = await MockService.getApplications();
-    const apps = allApps.filter(a => a.eventId === eventId);
-    setApplications(apps);
+        const allApps = await MockService.getApplications();
+        const apps = allApps.filter(a => a.eventId === eventId);
+        setApplications(apps);
 
-    const allUsers = await MockService.getUsers();
-    setUsers(allUsers);
+        const allUsers = await MockService.getUsers();
+        setUsers(allUsers);
+    } catch (e) {
+        // Silent update or toast only on first fail
+    }
   };
 
   const handleStatusChange = async (appId: string, status: 'APROVADO' | 'RECUSADO' | 'LISTA_ESPERA') => {
-    await MockService.updateApplicationStatus(appId, status);
-    
-    // Refresh local applications state
-    setApplications(prev => prev.map(a => a.id === appId ? { ...a, status } : a));
-    
-    // Always refresh event data to ensure vacancies counters (filled/total) are correct
-    const updatedEvents = await MockService.getEvents();
-    const updatedEvent = updatedEvents.find(e => e.id === eventId);
-    if(updatedEvent) setEvent(updatedEvent);
+    setProcessingId(appId);
+    try {
+        await MockService.updateApplicationStatus(appId, status);
+        
+        // Refresh local applications state
+        setApplications(prev => prev.map(a => a.id === appId ? { ...a, status } : a));
+        
+        // Always refresh event data to ensure vacancies counters (filled/total) are correct
+        const updatedEvents = await MockService.getEvents();
+        const updatedEvent = updatedEvents.find(e => e.id === eventId);
+        if(updatedEvent) setEvent(updatedEvent);
+        
+        addToast('success', 'Atualizado', `Status alterado para ${status}`);
+    } catch (e) {
+        console.error(e);
+        addToast('error', 'Erro', 'Não foi possível atualizar o status.');
+    } finally {
+        setProcessingId(null);
+    }
   };
 
   const submitEvaluation = () => {
@@ -61,10 +81,10 @@ const ManageEvent: React.FC<ManageEventProps> = ({ eventId, onBack }) => {
         average: avg
     });
     setEvalModalOpen(false);
-    alert(`Avaliação salva! Média: ${avg.toFixed(1)}`);
+    addToast('success', 'Avaliação Salva', `Média: ${avg.toFixed(1)}`);
   };
 
-  if (!event) return <div>Carregando...</div>;
+  if (!event) return <div className="p-12 text-center text-gray-500">Carregando gerenciamento...</div>;
 
   const filteredApps = selectedFunction === 'all' 
     ? applications 
@@ -132,6 +152,7 @@ const ManageEvent: React.FC<ManageEventProps> = ({ eventId, onBack }) => {
                     const user = users.find(u => u.id === app.userId);
                     const func = event.functions.find(f => f.id === app.functionId);
                     if (!user) return null;
+                    const isProcessing = processingId === app.id;
 
                     return (
                         <tr key={app.id} className="hover:bg-gray-50 transition-colors">
@@ -148,27 +169,42 @@ const ManageEvent: React.FC<ManageEventProps> = ({ eventId, onBack }) => {
                             </td>
                             <td className="p-4 text-sm text-gray-600">{func?.name}</td>
                             <td className="p-4">
-                                <span className={`px-2 py-1 rounded text-xs font-bold 
-                                    ${app.status === 'APROVADO' ? 'bg-green-100 text-green-700' : 
-                                      app.status === 'RECUSADO' ? 'bg-red-100 text-red-700' : 
-                                      'bg-yellow-100 text-yellow-700'}`}>
-                                    {app.status}
-                                </span>
+                                <div className="flex flex-col items-start gap-1">
+                                    <span className={`px-2 py-1 rounded text-xs font-bold 
+                                        ${app.status === 'APROVADO' ? 'bg-green-100 text-green-700' : 
+                                          app.status === 'RECUSADO' ? 'bg-red-100 text-red-700' : 
+                                          app.status === 'CANCELADO' ? 'bg-gray-200 text-gray-600' :
+                                          'bg-yellow-100 text-yellow-700'}`}>
+                                        {app.status}
+                                    </span>
+                                    {app.status === 'CANCELADO' && app.cancellationReason && (
+                                        <div className="flex items-start gap-1 text-[10px] text-red-600 max-w-[200px] leading-tight mt-1 bg-red-50 p-1 rounded border border-red-100">
+                                            <AlertTriangle size={10} className="shrink-0 mt-0.5" />
+                                            <span>"{app.cancellationReason}"</span>
+                                        </div>
+                                    )}
+                                </div>
                             </td>
                             <td className="p-4 text-right space-x-2">
-                                {app.status === 'PENDENTE' && (
+                                {isProcessing ? (
+                                    <Loader2 className="animate-spin text-gray-400 inline" size={18} />
+                                ) : (
                                     <>
-                                        <button onClick={() => handleStatusChange(app.id, 'APROVADO')} className="p-2 bg-green-50 text-green-600 rounded hover:bg-green-100 transition-colors" title="Aprovar"><Check size={16}/></button>
-                                        <button onClick={() => handleStatusChange(app.id, 'RECUSADO')} className="p-2 bg-red-50 text-red-600 rounded hover:bg-red-100 transition-colors" title="Recusar"><X size={16}/></button>
+                                        {app.status === 'PENDENTE' && (
+                                            <>
+                                                <button onClick={() => handleStatusChange(app.id, 'APROVADO')} className="p-2 bg-green-50 text-green-600 rounded hover:bg-green-100 transition-colors" title="Aprovar"><Check size={16}/></button>
+                                                <button onClick={() => handleStatusChange(app.id, 'RECUSADO')} className="p-2 bg-red-50 text-red-600 rounded hover:bg-red-100 transition-colors" title="Recusar"><X size={16}/></button>
+                                            </>
+                                        )}
+                                        {app.status === 'APROVADO' && (
+                                            <button onClick={() => handleStatusChange(app.id, 'RECUSADO')} className="p-2 bg-red-50 text-red-600 rounded hover:bg-red-100 transition-colors" title="Cancelar Aprovação"><X size={16}/></button>
+                                        )}
+                                        {event.status === 'CONCLUIDO' && app.status === 'APROVADO' && (
+                                            <button onClick={() => { setEvalUser(user); setEvalModalOpen(true); }} className="px-3 py-1 bg-blue-50 text-blue-600 text-xs font-bold rounded hover:bg-blue-100">
+                                                Avaliar
+                                            </button>
+                                        )}
                                     </>
-                                )}
-                                {app.status === 'APROVADO' && (
-                                     <button onClick={() => handleStatusChange(app.id, 'RECUSADO')} className="p-2 bg-red-50 text-red-600 rounded hover:bg-red-100 transition-colors" title="Cancelar Aprovação"><X size={16}/></button>
-                                )}
-                                {event.status === 'CONCLUIDO' && app.status === 'APROVADO' && (
-                                    <button onClick={() => { setEvalUser(user); setEvalModalOpen(true); }} className="px-3 py-1 bg-blue-50 text-blue-600 text-xs font-bold rounded hover:bg-blue-100">
-                                        Avaliar
-                                    </button>
                                 )}
                             </td>
                         </tr>

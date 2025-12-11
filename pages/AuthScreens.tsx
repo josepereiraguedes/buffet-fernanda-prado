@@ -32,6 +32,7 @@ const translateError = (message: string): string => {
     if (msg.includes('password should be at least')) return 'A senha deve ter no mínimo 6 caracteres.';
     if (msg.includes('anonymous signins are disabled')) return 'Acesso anônimo desativado.';
     if (msg.includes('rate limit')) return 'Muitas tentativas. Aguarde um momento.';
+    if (msg.includes('unprocessable entity') || msg.includes('422')) return 'Dados inválidos. Verifique se o email está correto e a senha tem 6+ dígitos.';
     return message; // Fallback to original message if unknown
 };
 
@@ -220,6 +221,14 @@ export const StaffRegister: React.FC<AuthProps> = ({ onLogin, onNavigate }) => {
         e.preventDefault();
         setLoading(true);
         setError('');
+
+        // 1. Validation Logic
+        if (password.length < 6) {
+            setError('A senha deve ter no mínimo 6 caracteres.');
+            setLoading(false);
+            return;
+        }
+
         try {
             const newUser = await MockService.registerUser(name, email, phone, password);
             onLogin(newUser);
@@ -281,7 +290,7 @@ export const StaffRegister: React.FC<AuthProps> = ({ onLogin, onNavigate }) => {
                 </div>
 
                 <div>
-                    <label className="block text-xs font-bold text-gray-600 uppercase mb-1">Criar Senha</label>
+                    <label className="block text-xs font-bold text-gray-600 uppercase mb-1">Criar Senha (Min. 6 dígitos)</label>
                     <div className="relative">
                         <Lock className="absolute left-3 top-3 text-gray-400" size={18} />
                         <input 

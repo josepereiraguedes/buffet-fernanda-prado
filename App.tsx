@@ -33,7 +33,11 @@ const AppContent: React.FC = () => {
       if (currentPath === '/') {
           const path = loggedUser.role === 'ADMIN' ? '/admin/dashboard' : '/staff/marketplace';
           setCurrentPath(path);
-          window.history.replaceState({}, '', path);
+          try {
+            window.history.replaceState({}, '', path);
+          } catch (e) {
+            console.warn("Could not update URL history:", e);
+          }
       }
     }
     
@@ -71,7 +75,11 @@ const AppContent: React.FC = () => {
   const navigate = (path: string) => {
     window.scrollTo(0, 0);
     setCurrentPath(path);
-    window.history.pushState({}, '', path);
+    try {
+        window.history.pushState({}, '', path);
+    } catch (e) {
+        console.warn("Navigation warning: Could not push state to history (environment restriction)", e);
+    }
   };
 
   const updateCurrentUser = (u: User) => {

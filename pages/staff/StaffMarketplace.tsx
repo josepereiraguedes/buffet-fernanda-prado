@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Event, Application, User } from '../../types';
 import { MockService } from '../../services/mockService';
 import EventCard from '../../components/EventCard';
-import { CheckCircle, Clock, XCircle, AlertCircle, AlertTriangle } from 'lucide-react';
+import { CheckCircle, Clock, XCircle, AlertCircle, AlertTriangle, Loader2 } from 'lucide-react';
 import { useToast } from '../../components/ui/Toast';
 import { CardSkeleton } from '../../components/ui/Skeleton';
 
@@ -15,6 +15,7 @@ const StaffMarketplace: React.FC<StaffMarketplaceProps> = ({ user }) => {
   const [applications, setApplications] = useState<Application[]>([]);
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [loading, setLoading] = useState(true);
+  const [applyingId, setApplyingId] = useState<string | null>(null); // Track which button is loading
   const { addToast } = useToast();
 
   // Cancellation State
@@ -58,19 +59,15 @@ const StaffMarketplace: React.FC<StaffMarketplaceProps> = ({ user }) => {
 
   const handleApply = async (roleId: string) => {
     if (!selectedEvent) return;
+    setApplyingId(roleId);
     
     const existingApp = applications.find(a => a.eventId === selectedEvent.id && a.status !== 'CANCELADO');
     if (existingApp) {
         addToast('info', 'Já inscrito', 'Você já possui uma inscrição ativa para este evento.');
+        setApplyingId(null);
         return;
     }
 
-    if (!user.pixKey) {
-        if(!confirm("Você ainda não cadastrou sua chave PIX. Deseja continuar mesmo assim? Recomendamos cadastrar no seu perfil para receber os pagamentos.")) {
-            return;
-        }
-    }
-    
     try {
         const newApp: Application = {
             id: '', // DB auto-gen
@@ -85,8 +82,19 @@ const StaffMarketplace: React.FC<StaffMarketplaceProps> = ({ user }) => {
         await loadData();
         setSelectedEvent(null); 
         addToast('success', 'Candidatura Enviada!', 'Aguarde a aprovação do administrador.');
-    } catch(e) {
-        addToast('error', 'Erro na candidatura', 'Tente novamente mais tarde.');
+        
+        // Non-blocking warning about PIX after success
+        if (!user.pixKey) {
+            setTimeout(() => {
+                 addToast('warning', 'Perfil Incompleto', 'Cadastre sua chave PIX no perfil para receber pagamentos.');
+            }, 1000);
+        }
+
+    } catch(e: any) {
+        console.error(e);
+        addToast('error', 'Erro na candidatura', e.message || 'Tente novamente mais tarde.');
+    } finally {
+        setApplyingId(null);
     }
   };
 
@@ -237,6 +245,7 @@ const StaffMarketplace: React.FC<StaffMarketplaceProps> = ({ user }) => {
                             const hasApplied = getApplicationForEvent(selectedEvent.id);
                             const isMyApplication = hasApplied?.functionId === f.id;
                             const isFull = f.filled >= f.vacancies;
+                            const isLoading = applyingId === f.id;
 
                             return (
                                 <div 
@@ -270,14 +279,15 @@ const StaffMarketplace: React.FC<StaffMarketplaceProps> = ({ user }) => {
                                             <span className="text-xs font-bold text-gray-400">Outra função</span>
                                         ) : (
                                             <button 
-                                                disabled={isFull}
+                                                disabled={isFull || isLoading}
                                                 onClick={() => handleApply(f.id)}
-                                                className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors shadow-sm ${
+                                                className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors shadow-sm flex items-center gap-2 ${
                                                     isFull 
                                                         ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
                                                         : 'bg-rose-600 text-white hover:bg-rose-700 hover:scale-105 transform'
                                                 }`}
                                             >
+                                                {isLoading && <Loader2 size={14} className="animate-spin" />}
                                                 {isFull ? 'Esgotado' : 'Candidatar-se'}
                                             </button>
                                         )}

@@ -16,27 +16,27 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ navigate }) => {
 
   useEffect(() => {
     loadData();
-    // Poll for updates
-    const interval = setInterval(loadData, 10000); // 10s poll for DB
+    // Poll for updates (faster polling for dashboard responsiveness)
+    const interval = setInterval(loadData, 5000); 
     return () => clearInterval(interval);
   }, []);
 
   const loadData = async () => {
       try {
         // Parallel fetching
-        const [e, u, a] = await Promise.all([
+        const [e, u, a, n] = await Promise.all([
             MockService.getEvents(),
             MockService.getUsers(),
-            MockService.getApplications()
+            MockService.getApplications(),
+            MockService.getNotifications()
         ]);
         
         setEvents(e);
         setUsers(u);
         setApplications(a);
         
-        // Notifications mock
-        const allNotifs = MockService.getNotifications();
-        setNotifications(allNotifs.filter(n => n.targetRole === 'ADMIN'));
+        // Filter notifications relevant to ADMIN
+        setNotifications(n.filter(notif => notif.targetRole === 'ADMIN'));
       } catch (err) {
           console.error("Dashboard Load Error", err);
       } finally {

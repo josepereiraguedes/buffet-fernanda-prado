@@ -1,6 +1,13 @@
 
 export type UserRole = 'ADMIN' | 'STAFF';
 
+export interface UserMetrics {
+  punctuality: number;
+  posture: number;
+  productivity: number;
+  agility: number;
+}
+
 export interface User {
   id: string;
   name: string;
@@ -14,6 +21,7 @@ export interface User {
   uniforms?: string[]; // e.g. "Calça Preta", "Camisa Branca"
   points?: number; // Gamification points
   pixKey?: string; // New field for Payment
+  metrics?: UserMetrics; // Persisted evaluation sliders
 }
 
 export type EventStatus = 'ABERTO' | 'EM_FORMACAO' | 'CONCLUIDO' | 'CANCELADO';
@@ -34,7 +42,7 @@ export interface Event {
   time: string;
   address: string;
   imageUrl: string;
-  type: string; // Casamento, Corporativo
+  type: string;
   description: string;
   status: EventStatus;
   functions: EventFunction[];

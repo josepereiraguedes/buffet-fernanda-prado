@@ -1,32 +1,47 @@
 import React, { useEffect, useState } from 'react';
-import { Check, X, Clock, Calendar, AlertCircle } from 'lucide-react';
+import { Check, X, Clock, Calendar, AlertCircle, Loader2 } from 'lucide-react';
 import { Application, Event, User } from '../../types';
 import { MockService } from '../../services/mockService';
+import { useToast } from '../../components/ui/Toast';
 
 const Approvals: React.FC = () => {
   const [pendingApps, setPendingApps] = useState<Application[]>([]);
   const [events, setEvents] = useState<Event[]>([]);
   const [users, setUsers] = useState<User[]>([]);
+  const [processingId, setProcessingId] = useState<string | null>(null);
+  const { addToast } = useToast();
 
   useEffect(() => {
     refreshData();
   }, []);
 
   const refreshData = async () => {
-    const allApps = await MockService.getApplications();
-    const pending = allApps.filter(a => a.status === 'PENDENTE');
-    setPendingApps(pending);
-    
-    const allEvents = await MockService.getEvents();
-    setEvents(allEvents);
-    
-    const allUsers = await MockService.getUsers();
-    setUsers(allUsers);
+    try {
+        const allApps = await MockService.getApplications();
+        const pending = allApps.filter(a => a.status === 'PENDENTE');
+        setPendingApps(pending);
+        
+        const allEvents = await MockService.getEvents();
+        setEvents(allEvents);
+        
+        const allUsers = await MockService.getUsers();
+        setUsers(allUsers);
+    } catch (e) {
+        addToast('error', 'Erro', 'Falha ao carregar aprovações.');
+    }
   };
 
   const handleAction = async (appId: string, status: 'APROVADO' | 'RECUSADO') => {
-    await MockService.updateApplicationStatus(appId, status);
-    refreshData();
+    setProcessingId(appId);
+    try {
+        await MockService.updateApplicationStatus(appId, status);
+        await refreshData();
+        addToast('success', 'Sucesso', status === 'APROVADO' ? 'Solicitação aprovada.' : 'Solicitação recusada.');
+    } catch (e) {
+        addToast('error', 'Erro', 'Falha ao atualizar solicitação.');
+    } finally {
+        setProcessingId(null);
+    }
   };
 
   return (
@@ -62,6 +77,7 @@ const Approvals: React.FC = () => {
                    const user = users.find(u => u.id === app.userId);
                    const event = events.find(e => e.id === app.eventId);
                    const func = event?.functions.find(f => f.id === app.functionId);
+                   const isProcessing = processingId === app.id;
 
                    if(!user || !event) return null;
 
@@ -91,18 +107,24 @@ const Approvals: React.FC = () => {
                         </td>
                         <td className="p-5 text-right">
                            <div className="flex justify-end gap-2">
-                              <button 
-                                onClick={() => handleAction(app.id, 'APROVADO')}
-                                className="flex items-center gap-1 bg-green-50 text-green-700 px-3 py-1.5 rounded-lg font-bold text-sm hover:bg-green-100 transition-colors"
-                              >
-                                 <Check size={16} /> Aprovar
-                              </button>
-                              <button 
-                                onClick={() => handleAction(app.id, 'RECUSADO')}
-                                className="flex items-center gap-1 bg-red-50 text-red-700 px-3 py-1.5 rounded-lg font-bold text-sm hover:bg-red-100 transition-colors"
-                              >
-                                 <X size={16} /> Recusar
-                              </button>
+                              {isProcessing ? (
+                                  <Loader2 className="animate-spin text-gray-400" size={24} />
+                              ) : (
+                                  <>
+                                      <button 
+                                        onClick={() => handleAction(app.id, 'APROVADO')}
+                                        className="flex items-center gap-1 bg-green-50 text-green-700 px-3 py-1.5 rounded-lg font-bold text-sm hover:bg-green-100 transition-colors"
+                                      >
+                                         <Check size={16} /> Aprovar
+                                      </button>
+                                      <button 
+                                        onClick={() => handleAction(app.id, 'RECUSADO')}
+                                        className="flex items-center gap-1 bg-red-50 text-red-700 px-3 py-1.5 rounded-lg font-bold text-sm hover:bg-red-100 transition-colors"
+                                      >
+                                         <X size={16} /> Recusar
+                                      </button>
+                                  </>
+                              )}
                            </div>
                         </td>
                      </tr>
